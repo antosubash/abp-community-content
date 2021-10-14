@@ -1,6 +1,6 @@
 # Modular application development Part 1 (Single database)
 
-In this post we will see how to develop a modular abp application. We will explore the Module template and then create sample modules. Each module will use the one database to store the modules data and separate database for the identity data.
+In this post we will see how to develop a modular abp application. We will explore the Module template and then create sample modules. all module will use the same database to store the modules data and the identity data.
 
 ## Modular application in ABP
 
