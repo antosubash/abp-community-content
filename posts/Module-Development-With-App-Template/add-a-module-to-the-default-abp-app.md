@@ -61,7 +61,7 @@ Configuration is done in the `DbContextModelCreatingExtensions` class. This shou
 ```cs
 builder.Entity<TodoOne>(b =>
 {
-    b.ToTable(TodoOnesConsts.DbTablePrefix + "TodoOnes", TodoOnesConsts.DbSchema);
+    b.ToTable(options.TablePrefix + "TodoOnes", options.Schema);
     b.ConfigureByConvention(); //auto configure for the base class props
 });
 ```
@@ -75,7 +75,7 @@ Go the `MainApp.EntityFrameworkCore` project in the terminal and create migratio
 To create migration run this command:
 
 ```bash
-dotnet ef migrations add created_todoOne
+dotnet ef migrations add created_todoone
 ```
 
 Verify the migrations created in the migrations folder.
@@ -112,7 +112,7 @@ CreateMap<TodoOneDto, TodoOne>();
 Application service are created in the `MainApp.ModuleA.Application` project
 
 ```cs
-public class TodoOneAppService : ModuleOneAppService
+public class TodoOneAppService : MainAppAppService
 {
     private readonly IRepository<TodoOne, Guid> todoOneRepository;
 
@@ -162,7 +162,7 @@ options.AddDefaultRepositories(includeAllEntities: true);
 ## 9. Update the `OnModelCreating` in the `MainAppDbContext` in the `MainApp.EntityFrameworkCore` project
 
 ```cs
-modelBuilder.ConfigureModuleA();
+builder.ConfigureModuleA();
 ```
 
 ## 10. Update the `ConfigureAutoApiControllers` in the `MainAppWebModule` in the `MainApp.Web`
