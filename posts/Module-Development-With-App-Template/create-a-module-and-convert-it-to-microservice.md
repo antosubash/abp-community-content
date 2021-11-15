@@ -2,6 +2,8 @@
 
 In this post we will see how to create a modular abp application and convert it to microservice. We will add a new module to tiered abp app and then use the separate database to store the modules data and then convert the module to a microservice.
 
+In this sample we will create Tiered app which is called `MainApp`. Then we will add a module called `ProjectService`.
+
 ## Creating the abp application and run migrations
 
 ```bash
@@ -203,7 +205,7 @@ namespace ProjectService.HttpApi.Host
             app.UseAuthorization();
             app.UseSwagger();
             app.UseAbpSwaggerUI(options => {
-                options.SwaggerEndpoint("/swagger/v1/swagger.json", "ModuleA Service API");
+                options.SwaggerEndpoint("/swagger/v1/swagger.json", "ProjectService Service API");
                 var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
                 options.OAuthClientId(configuration["AuthServer:SwaggerClientId"]); 
                 options.OAuthClientSecret(configuration["AuthServer:SwaggerClientSecret"]); 
@@ -251,7 +253,7 @@ namespace ProjectService
 
             try
             {
-                Log.Information("Starting ModuleA.Host.");
+                Log.Information("Starting ProjectService.Host.");
                 CreateHostBuilder(args).Build().Run();
                 return 0;
             }
@@ -327,3 +329,188 @@ namespace ProjectService.HttpApi.Host.Controllers
 }
 ```
 
+Now we have created the host and now we can create the AppService
+
+## Add new Entity to the ProjectService
+
+We will create a new Entity inside the `ProjectService.Domain` called `TodoOne`.
+
+## Create an Entity
+
+Learn more about the [Entity](https://docs.abp.io/en/abp/latest/Entities) in the abp docs.
+
+First step is to create an Entity. Create the Entity in the `ProjectService.Domain` project.
+
+```cs
+public class Project : Entity<Guid>
+{
+    public string Name { get; set; }
+}
+```
+
+## Add Entity to EfCore
+
+Learn more about the [ef core](https://docs.abp.io/en/abp/latest/Entity-Framework-Core) in the abp docs.
+
+Next is to add Entity to the EF Core. you will find the DbContext in the `ProjectService.EntityFrameworkCore` project. Add the DbSet to the DbContext
+
+```cs
+public DbSet<Project> Projects { get; set; }
+```
+
+## Configure Entity in EfCore
+
+Configuration is done in the `DbContextModelCreatingExtensions` class. This should be available in the `ProjectService.EntityFrameworkCore` project
+
+```cs
+builder.Entity<Project>(b =>
+{
+    //Configure table & schema name
+    b.ToTable(options.TablePrefix + "Projects", options.Schema);
+
+    b.ConfigureByConvention();
+});
+```
+
+## Prepare for the migration
+
+We need to create a `ProjectServiceDbContextFactory` to support migrations. [Check here for more info about this](https://docs.microsoft.com/en-us/ef/core/cli/dbcontext-creation?tabs=dotnet-core-cli)
+
+```cs
+public class ProjectServiceDbContextFactory : IDesignTimeDbContextFactory<ProjectServiceDbContext>
+{
+    public ProjectServiceDbContext CreateDbContext(string[] args)
+    {
+        var builder = new DbContextOptionsBuilder<ProjectServiceDbContext>()
+            .UseSqlServer(GetConnectionStringFromConfiguration());
+        return new ProjectServiceDbContext(builder.Options);
+    }
+
+    private static string GetConnectionStringFromConfiguration()
+    {
+        return BuildConfiguration()
+            .GetConnectionString(ProjectServiceDbProperties.ConnectionStringName);
+    }
+
+    private static IConfigurationRoot BuildConfiguration()
+    {
+        var builder = new ConfigurationBuilder()
+            .SetBasePath(
+                Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    $"..{Path.DirectorySeparatorChar}ProjectService.HttpApi.Host"
+                )
+            )
+            .AddJsonFile("appsettings.json", optional: false);
+
+        return builder.Build();
+    }
+}
+```
+
+This is needed for ef core migration to work. We are building the configuration by taking the `appsetting.json` from the `ProjectService.HttpApi.Host`.
+
+## Adding Migrations
+
+Now the `DbContextFactory` is configured we can add the migrations.
+
+Go the `ProjectService.EntityFrameworkCore` project in the terminal and create migrations.
+
+To create migration run this command:
+
+```bash
+dotnet ef migrations add created_projects
+```
+
+Verify the migrations created in the migrations folder.
+
+To update the database run this command
+
+```bash
+dotnet ef database update
+```
+
+## Create a Entity Dto
+
+Dto are placed in `ProjectService.Application.Contracts` project
+
+```cs
+public class ProjectDto: EntityDto<Guid>
+{
+    public string Name { get; set; }
+}
+```
+
+## Create a AppService interface
+
+create `IProjectAppService` interface in the `ProjectService.Application.Contracts` project
+
+```cs
+public interface IProjectAppService
+{
+    Task<List<ProjectDto>> GetListAsync();
+    Task<ProjectDto> CreateAsync(string text);
+    Task DeleteAsync(Guid id);
+}
+```
+
+## Create an Application Services
+
+Learn more about the [Application Services](https://docs.abp.io/en/abp/latest/Application-Services) in the abp docs.
+
+Application service are created in the `ProjectService.Application` project
+
+```cs
+public class ProjectAppService : ProjectServiceAppService, IProjectAppService
+{
+    private readonly IRepository<Project, Guid> projectRepository;
+
+    public ProjectAppService(IRepository<Project, Guid> projectRepository)
+    {
+        this.projectRepository = projectRepository;
+    }
+
+    public async Task<ProjectDto> CreateAsync(string text)
+    {
+        var projectItem = await projectRepository.InsertAsync(
+                            new Project { Name = text }
+                            );
+
+        return new ProjectDto
+        {
+            Id = projectItem.Id,
+            Name = projectItem.Name
+        };
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        await projectRepository.DeleteAsync(id);
+    }
+
+    public async Task<List<ProjectDto>> GetListAsync()
+    {
+        var items = await projectRepository.GetListAsync();
+        return items
+            .Select(item => new ProjectDto
+            {
+                Id = item.Id,
+                Name = item.Name
+            }).ToList();
+    }
+}
+```
+
+## Update `ConfigureServices` method in the `ProjectServiceEntityFrameworkCoreModule`
+
+```cs
+context.Services.AddAbpDbContext<ProjectServiceDbContext>(options =>
+{
+    options.AddDefaultRepositories(includeAllEntities: true);
+});
+
+Configure<AbpDbContextOptions>(options =>
+{
+    options.UseSqlServer();
+});
+```
