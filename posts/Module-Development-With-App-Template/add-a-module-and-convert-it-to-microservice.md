@@ -501,7 +501,9 @@ public class ProjectAppService : ProjectServiceAppService, IProjectAppService
 }
 ```
 
-## Update `ConfigureServices` method in the `ProjectServiceEntityFrameworkCoreModule`
+## Update the EntityFrameworkCoreModule
+
+Update the `ConfigureServices` method in the `ProjectServiceEntityFrameworkCoreModule` file.
 
 ```cs
 context.Services.AddAbpDbContext<ProjectServiceDbContext>(options =>
@@ -513,4 +515,72 @@ Configure<AbpDbContextOptions>(options =>
 {
     options.UseSqlServer();
 });
+```
+
+## Create API Scope, API Resource and Swagger Client in IdentityServer
+
+We need to do this in the `MainApp`. We have to update the `IdentityServerDataSeedContributor` in the `MainApp.Domain`.
+
+```cs
+private async Task CreateApiScopesAsync()
+{
+    await CreateApiScopeAsync("MainApp");
+    await CreateApiScopeAsync("ProjectService");
+}
+
+private async Task CreateApiResourcesAsync()
+{
+    var commonApiUserClaims = new[]
+    {
+        "email",
+        "email_verified",
+        "name",
+        "phone_number",
+        "phone_number_verified",
+        "role"
+    };
+
+    await CreateApiResourceAsync("MainApp", commonApiUserClaims);
+    await CreateApiResourceAsync("ProjectService", commonApiUserClaims);
+}
+```
+
+Now lets update the create the swagger client for the new service.
+
+In the `MainApp.DbMigrator` project update the `appsettings.json` with the new swagger client.
+
+```cs
+"ProjectService_Swagger": {
+    "ClientId": "ProjectService_Swagger",
+    "ClientSecret": "1q2w3e*",
+    "RootUrl": "{ Your Service url }"
+}
+```
+
+Update the `CreateClientsAsync` method to create the swagger client in the `IdentityServerDataSeedContributor` in the `MainApp.Domain`.
+
+```cs
+var swaggerClientIdProjectService = configurationSection["ProjectService_Swagger:ClientId"];
+if (!swaggerClientIdProjectService.IsNullOrWhiteSpace())
+{
+    var swaggerRootUrl = configurationSection["ProjectService_Swagger:RootUrl"].TrimEnd('/');
+
+    await CreateClientAsync(
+        name: swaggerClientIdProjectService,
+        scopes: commonScopes,
+        grantTypes: new[] { "authorization_code" },
+        secret: configurationSection["ProjectService_Swagger:ClientSecret"]?.Sha256(),
+        requireClientSecret: false,
+        redirectUri: $"{swaggerRootUrl}/swagger/oauth2-redirect.html",
+        corsOrigins: new[] { swaggerRootUrl.RemovePostFix("/") }
+    );
+}
+```
+
+## Run Migrations again for the MainApp
+
+Change directory to `MainApp.DbMigrator` and run the migration project
+
+```bash
+dotnet run
 ```
