@@ -95,9 +95,13 @@ Add the following packages to the `ProjectService.HttpApi.Host` project.
 </ItemGroup>
 ```
 
+These are the essential packages for our host. 
+
 Add `ProjectService.Application`, `ProjectService.EntityFrameworkCore`, `ProjectService.HttpApi` projects as a reference to your `ProjectService.HttpApi.Host`
 
-Create a `ProjectServiceHostModule` in the newly created `ProjectService.HttpApi.Host`.
+We are adding the projects reference because the host project module will depend on the module from these projects.
+
+Create a `ProjectServiceHostModule` in the newly created `ProjectService.HttpApi.Host`. This will be a abp module where we will setup the host.
 
 Here is the sample for the `ProductService`.
 
@@ -219,6 +223,8 @@ namespace ProjectService.HttpApi.Host
 }
 ```
 
+In this module the depends on section configures the modules that it depends on in the `DependsOn` section and we will configure the JWT auth and the swagger UI for the host.
+
 Update the `Program.cs`
 
 ```cs
@@ -285,6 +291,8 @@ namespace ProjectService
 }
 ```
 
+Program file is updated to use the serilog with enrichers.
+
 Update the `Startup.cs`
 
 ```cs
@@ -311,6 +319,8 @@ namespace ProjectService
 }
 ```
 
+In the startup file we are configuring our newly created Host module.
+
 Create a `HomeController.cs` in the `Controller` folder and update wit the following text.
 
 ```cs
@@ -329,11 +339,15 @@ namespace ProjectService.HttpApi.Host.Controllers
 }
 ```
 
-Now we have created the host and now we can create the AppService
+Now our default route will be swagger.
+
+We are mostly done with the host and now we can create the AppService.
 
 ## Add new Entity to the ProjectService
 
-We will create a new Entity inside the `ProjectService.Domain` called `TodoOne`.
+We are going to create a simple `Project` entity and create a AppService for that project. This section of the tutorial is based on the [Quick Start Guid](https://docs.abp.io/en/abp/latest/Tutorials/Todo/Index?UI=MVC&DB=EF)
+
+We will create a new Entity inside the `ProjectService.Domain` called `Project`.
 
 ## Create an Entity
 
@@ -584,3 +598,11 @@ Change directory to `MainApp.DbMigrator` and run the migration project
 ```bash
 dotnet run
 ```
+
+This will run the `DbMigrator` project. The `DbMigrator` will seed the database with the New Scope, API and Client in our Identity Server.
+
+Once the migration is done we are ready to run the app and see it working.
+
+## Running the application
+
+You need to run the host project and the identity server for auth to work.
